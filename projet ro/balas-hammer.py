@@ -1,6 +1,4 @@
 import math
-# Le module math est utilisé uniquement pour la constante math.inf
-# (infini), nécessaire lorsque la pénalité est infinie
 # (cas où une seule case reste dans une ligne ou une colonne).
 
 
@@ -196,3 +194,4 @@ for ligne in solution:
 
 # Calcul et affichage du coût total
 print("\nCoût total =", cout_total(couts, solution))
+
