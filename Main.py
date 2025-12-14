@@ -1,4 +1,6 @@
 import os
+from collections import defaultdict
+from collections import deque
 
 # ================================================================
 # AFFICHAGE GENERIQUE D'UN TABLEAU (BORDURES FINES)
@@ -240,6 +242,338 @@ def balas_hammer(A, P, C):
     m = len(C)
     return [[0 for _ in range(m)] for _ in range(n)]
 
+# ================================================================
+# ALGORITHME MARCHE PIED EN COURS
+# ================================================================
+
+def construire_graphe(B):
+    n = len(B)
+    m = len(B[0]) if n > 0 else 0
+    graphe = defaultdict(list)
+
+    for i in range(n):
+        for j in range(m):
+            if B[i][j] > 0:
+                p = ('P', i)
+                c = ('C', j)
+                graphe[p].append(c)
+                graphe[c].append(p)
+    return graphe
+
+
+
+def detecter_cycle_bfs(graphe):
+    visited = set()
+    parent = {}
+
+    for sommet_depart in graphe:
+        if sommet_depart not in visited:
+            queue = deque([sommet_depart])
+            visited.add(sommet_depart)
+            parent[sommet_depart] = None
+
+            while queue:
+                u = queue.popleft()
+
+                for v in graphe[u]:
+                    if v not in visited:
+                        visited.add(v)
+                        parent[v] = u
+                        queue.append(v)
+
+                    elif parent[u] != v:
+                        cycle = reconstruire_cycle(parent, u, v)
+                        return True, cycle
+
+    return False, []
+
+
+def reconstruire_cycle(parent, u, v):
+    """
+    Reconstruit le cycle lorsqu'un BFS détecte un cycle.
+    parent : dictionnaire parent[sommet]
+    u, v : sommets aux extrémités du cycle détecté
+    Retour : liste de sommets formant le cycle
+    """
+    chemin_u = []
+    x = u
+    while x is not None:
+        chemin_u.append(x)
+        x = parent[x]
+
+    chemin_v = []
+    x = v
+    while x is not None:
+        chemin_v.append(x)
+        x = parent[x]
+
+    # Trouver le premier ancêtre commun
+    for s in chemin_u:
+        if s in chemin_v:
+            idx_u = chemin_u.index(s)
+            idx_v = chemin_v.index(s)
+            return chemin_u[:idx_u+1] + chemin_v[:idx_v][::-1]
+
+    return []
+
+from collections import deque
+
+def composantes_connexes(graphe):
+    """
+    Retourne toutes les composantes connexes du graphe.
+    Chaque composante est une liste de sommets.
+    """
+    visited = set()
+    composantes = []
+
+    for sommet in graphe:
+        if sommet not in visited:
+            comp = []
+            queue = deque([sommet])
+            visited.add(sommet)
+
+            while queue:
+                u = queue.popleft()
+                comp.append(u)
+                for v in graphe[u]:
+                    if v not in visited:
+                        visited.add(v)
+                        queue.append(v)
+
+            composantes.append(comp)
+
+    return composantes
+
+def maximiser_sur_cycle(B, cycle):
+    """
+    Maximisation du transport sur un cycle détecté.
+    cycle : liste de sommets alternant P/C
+    B : matrice des quantités
+    Retour : B mise à jour
+    """
+    edges = []
+
+    # Construire les arêtes (i, j) selon le cycle
+    for k in range(len(cycle)):
+        a = cycle[k]
+        b = cycle[(k + 1) % len(cycle)]
+        if a[0] == 'P':
+            edges.append((a[1], b[1]))
+        else:
+            edges.append((b[1], a[1]))
+
+    # Arêtes "moins" = positions impaires
+    moins = edges[1::2]
+
+    # θ = minimum des quantités sur arêtes "-"
+    theta = min(B[i][j] for i, j in moins)
+
+    # Mise à jour des quantités sur le cycle
+    for idx, (i, j) in enumerate(edges):
+        if idx % 2 == 0:
+            B[i][j] += theta
+        else:
+            B[i][j] -= theta
+
+    return B
+
+def corriger_degenerescence(B):
+    """
+    Ajoute des arêtes fictives (quantité 1) si nécessaire pour obtenir n+m-1 arêtes.
+    Garantit que le graphe devient connexe pour le calcul des potentiels.
+    """
+    n = len(B)
+    m = len(B[0])
+    arêtes = sum(1 for i in range(n) for j in range(m) if B[i][j] > 0)
+
+    for i in range(n):
+        for j in range(m):
+            if arêtes >= n + m - 1:
+                break
+            if B[i][j] == 0:
+                B[i][j] = 1  # arête fictive réelle pour connecter le graphe
+                arêtes += 1
+
+    return B
+
+
+def calculer_potentiels(A, B):
+    """
+    Calcule les potentiels u (fournisseurs) et v (clients) pour une proposition B.
+    Gestion robuste : si un sommet est isolé, on met son potentiel à 0.
+    """
+    n = len(B)
+    m = len(B[0])
+    u = [None] * n
+    v = [None] * m
+
+    # On fixe u[0] = 0
+    u[0] = 0
+    queue = [0]  # sommets fournisseurs à traiter
+
+    while queue:
+        i = queue.pop(0)
+        for j in range(m):
+            if B[i][j] > 0:
+                if v[j] is None:
+                    v[j] = A[i][j] - u[i]
+                    # on peut maintenant propager à d'autres fournisseurs connectés à j
+                    for k in range(n):
+                        if B[k][j] > 0 and u[k] is None:
+                            u[k] = A[k][j] - v[j]
+                            queue.append(k)
+
+    # Tout potentiel restant None → on le met à 0
+    for idx in range(n):
+        if u[idx] is None:
+            u[idx] = 0
+    for idx in range(m):
+        if v[idx] is None:
+            v[idx] = 0
+
+    return u, v
+
+
+def calculer_couts_marginaux(A, B, u, v):
+    """
+    Calcul des coûts marginaux Δ_ij = c_ij - (u_i + v_j) pour les cases non basiques (B[i][j]==0)
+    """
+    n = len(B)
+    m = len(B[0])
+    Delta = [[0 for _ in range(m)] for _ in range(n)]
+
+    for i in range(n):
+        for j in range(m):
+            if B[i][j] == 0:
+                Delta[i][j] = A[i][j] - (u[i] + v[j])
+            else:
+                Delta[i][j] = ""  # case basique
+
+    return Delta
+
+def meilleure_arete_ameliore(Delta):
+    """
+    Recherche la case non basique ayant le Δ minimal (plus négatif)
+    Retour : position (i,j) et valeur Δ
+    """
+    best = 0
+    pos = None
+
+    for i in range(len(Delta)):
+        for j in range(len(Delta[0])):
+            if Delta[i][j] != "" and Delta[i][j] < best:
+                best = Delta[i][j]
+                pos = (i, j)
+
+    return pos, best
+
+def methode_marche_pied(A, P, C):
+    """
+    Méthode du marche-pied complète et correcte avec Nord-Ouest.
+    Entrée :
+        A : matrice des coûts
+        P : liste des provisions
+        C : liste des commandes
+    Sortie :
+        B : proposition finale de transport
+    """
+    n = len(P)
+    m = len(C)
+
+    # -------------------------------
+    # Proposition initiale : Nord-Ouest
+    # -------------------------------
+    B = nord_ouest(P, C)
+
+    # -------------------------------
+    # Corriger dégénérescence pour connexité
+    # -------------------------------
+    B = corriger_degenerescence(B)
+
+    # -------------------------------
+    # Construire graphe à partir de B
+    # -------------------------------
+    graphe = construire_graphe(B)
+
+    # -------------------------------
+    # Détection de cycle
+    # -------------------------------
+    has_cycle, cycle = detecter_cycle_bfs(graphe)
+    print("\n--- Méthode du marche-pied ---")
+    if has_cycle:
+        print("Cycle détecté :", cycle)
+
+        # Conversion cycle en arêtes (i,j)
+        edges = []
+        for k in range(len(cycle)):
+            curr_type, curr_idx = cycle[k]
+            next_type, next_idx = cycle[(k+1)%len(cycle)]
+            if curr_type == 'P' and next_type == 'C':
+                edges.append((curr_idx, next_idx))
+            elif curr_type == 'C' and next_type == 'P':
+                edges.append((next_idx, curr_idx))
+
+        # -------------------------------
+        # Maximisation du transport sur le cycle
+        # -------------------------------
+        min_val = float('inf')
+        for k, (i,j) in enumerate(edges):
+            if k % 2 == 1:  # positions à réduire
+                if B[i][j] < min_val:
+                    min_val = B[i][j]
+        # Appliquer alternance + et -
+        for k, (i,j) in enumerate(edges):
+            if k % 2 == 0:
+                B[i][j] += min_val
+            else:
+                B[i][j] -= min_val
+        print("Maximisation effectuée sur le cycle avec quantité =", min_val)
+    else:
+        print("Aucun cycle détecté")
+
+    # -------------------------------
+    # Test connexité
+    # -------------------------------
+    composantes = composantes_connexes(graphe)
+    if len(composantes) == 1:
+        print("Graphe connexe")
+    else:
+        print("Graphe non connexe")
+        print("Composantes :", composantes)
+        B = corriger_degenerescence(B)
+        print("Proposition corrigée pour connexité")
+
+    # -------------------------------
+    # Calcul des potentiels u et v (robuste)
+    # -------------------------------
+    u, v = calculer_potentiels(A, B)
+
+    headers_pot, donnees_pot = construire_tableau_potentiels(u, v)
+    print("\n--- Table des potentiels (u,v) ---")
+    afficher_tableau(headers_pot, donnees_pot)
+
+    # -------------------------------
+    # Calcul des coûts marginaux Δ
+    # -------------------------------
+    Delta = calculer_couts_marginaux(A, B, u, v)
+    headers_delta, donnees_delta = construire_tableau_matrice(Delta)
+    print("\n--- Table des coûts marginaux Δ ---")
+    afficher_tableau(headers_delta, donnees_delta)
+
+    # -------------------------------
+    # Détection et ajout de la meilleure arête améliorante
+    # -------------------------------
+    pos, valeur = meilleure_arete_ameliore(Delta)
+    if pos is not None:
+        i,j = pos
+        print(f"\nMeilleure arête améliorante : B[{i+1},{j+1}] avec Δ = {valeur}")
+        B[i][j] = 1  # ajout automatique
+        print(f"Arête B[{i+1},{j+1}] ajoutée à la proposition")
+    else:
+        print("\nAucune arête améliorante détectée")
+
+    return B
+
 
 
 # ================================================================
@@ -289,6 +623,7 @@ if __name__ == "__main__":
             print("4 - Afficher la table des coûts marginaux")
             print("5 - Appliquer l'algorithme Nord-Ouest à la proposition de transport")
             print("6 - Appliquer l'algorithme Balas-Hammer à la proposition de transport")
+            print("7 - Appliquer la méthode du marche-pied")
             print("0 - Revenir au choix du problème")
 
             choix_action = input("Votre choix : ").strip()
@@ -334,6 +669,12 @@ if __name__ == "__main__":
                 afficher_tableau(headers_B, donnees_B)
 
                 # Plus tard : recalculer u, v, Delta ici
+            elif choix_action == "7":
+                B = methode_marche_pied(A, P, C)
+
 
             else:
                 print("Choix invalide, merci de saisir un numéro du menu.")
+
+
+
