@@ -6,10 +6,6 @@ from collections import deque
 # AFFICHAGE GENERIQUE D'UN TABLEAU (BORDURES FINES)
 # ================================================================
 def afficher_tableau(headers, donnees):
-    """
-    Affiche un tableau ASCII avec bordures fines (Unicode),
-    colonnes centrées, et lignes séparatrices.
-    """
     col_widths = [
         max(len(str(x)) for x in [headers[i]] + [ligne[i] for ligne in donnees])
         for i in range(len(headers))
@@ -46,14 +42,6 @@ def afficher_tableau(headers, donnees):
 # LECTURE DU PROBLEME DE TRANSPORT DEPUIS /Fichier/
 # ================================================================
 def lire_probleme_transport(nom_fichier):
-    """
-    Format attendu :
-        n m
-        a11 a12 ... a1m P1
-        ...
-        an1 an2 ... anm Pn
-        C1 C2 ... Cm
-    """
     chemin = os.path.join("Fichier", nom_fichier)
 
     with open(chemin, "r") as f:
@@ -81,14 +69,6 @@ def lire_probleme_transport(nom_fichier):
 # TABLEAU DES COUTS (A) + PROVISIONS (P) + COMMANDES (C)
 # ================================================================
 def construire_tableau_couts(A, P, C):
-    """
-    Construit headers + donnees pour représenter :
-          C1  C2 ... Cm   P
-    P1   a11 a12 ... a1m P1
-    ...
-    Pn   an1 ...     anm Pn
-    Commandes C1 C2 ... Cm
-    """
     headers = [""] + [f"C{j+1}" for j in range(len(C))] + ["P"]
 
     donnees = []
@@ -104,21 +84,10 @@ def construire_tableau_couts(A, P, C):
 # PROPOSITION DE TRANSPORT (MATRICE B)
 # ================================================================
 def initialiser_proposition(n, m):
-    """
-    Crée une matrice B de taille n x m initialisée à 0.
-    B[i][j] = quantité de Pi vers Cj.
-    """
     return [[0 for _ in range(m)] for _ in range(n)]
 
 
 def construire_tableau_proposition(B):
-    """
-    Tableau pour afficher la proposition B :
-          C1  C2 ... Cm
-    P1   b11 b12 ... b1m
-    ...
-    Pn   bn1 ...     bnm
-    """
     n = len(B)
     m = len(B[0]) if n > 0 else 0
 
@@ -135,16 +104,7 @@ def construire_tableau_proposition(B):
 # TABLE DES POTENTIELS (u POUR P_i, v POUR C_j)
 # ================================================================
 def construire_tableau_potentiels(u, v):
-    """
-    Tableau pour afficher :
-        Sommet   Potentiel
-        P1       u1
-        ...
-        Pn       un
-        C1       v1
-        ...
-        Cm       vm
-    """
+
     donnees = []
 
     for i, val in enumerate(u):
@@ -161,13 +121,6 @@ def construire_tableau_potentiels(u, v):
 # TABLE GENERIQUE POUR UNE MATRICE (ex : COUTS MARGINAUX)
 # ================================================================
 def construire_tableau_matrice(M):
-    """
-    Tableau pour afficher une matrice M (ex: coûts marginaux Δ_ij) :
-          C1   C2 ... Cm
-    P1   M11 M12 ... M1m
-    ...
-    Pn   Mn1 ...    Mnm
-    """
     n = len(M)
     m = len(M[0]) if n > 0 else 0
 
@@ -184,66 +137,130 @@ def construire_tableau_matrice(M):
 # ALGORITHME NORD-OUEST : PROPOSITION INITIALE
 # ================================================================
 def nord_ouest(P, C):
-    """
-    Algorithme de Nord-Ouest.
-    Entrée :
-        P : liste des provisions (P1..Pn)
-        C : liste des commandes (C1..Cm)
-    Sortie :
-        B : matrice n x m des quantités b_ij
-    On suppose le problème équilibré : sum(P) == sum(C).
-    """
 
     n = len(P)
     m = len(C)
 
-    # Matrice de transport initialisée à 0
     B = [[0 for _ in range(m)] for _ in range(n)]
 
-    # Copies locales de P et C pour ne pas modifier les originales
     restP = P.copy()
     restC = C.copy()
 
-    i = 0  # ligne (fournisseur)
-    j = 0  # colonne (client)
+    i = 0  
+    j = 0  
 
     while i < n and j < m:
-        # quantité qu'on peut mettre sur la case (i, j)
         x = min(restP[i], restC[j])
         B[i][j] = x
 
         restP[i] -= x
         restC[j] -= x
 
-        # Si le fournisseur i est épuisé, on passe à la ligne suivante
         if restP[i] == 0 and i < n - 1:
             i += 1
-        # Sinon, si le client j est servi, on passe à la colonne suivante
         elif restC[j] == 0 and j < m - 1:
             j += 1
         else:
-            # Plus rien à affecter (dernier fournisseur ou dernier client)
             break
 
     return B
 
 
 # ================================================================
-# ALGORITHME BALAS-HAMMER (STUB POUR L'INSTANT)
+# ALGORITHME BALAS-HAMMER 
 # ================================================================
+
 def balas_hammer(A, P, C):
-    """
-    Algorithme de Balas-Hammer.
-    Pour l'instant : non implémenté, juste un message et renvoie une matrice de 0.
-    On remplira ça plus tard.
-    """
-    print("\n[INFO] Balas-Hammer n'est pas encore implémenté.")
     n = len(P)
     m = len(C)
-    return [[0 for _ in range(m)] for _ in range(n)]
+
+    B = [[0 for _ in range(m)] for _ in range(n)]
+    restP = P.copy()
+    restC = C.copy()
+
+    lignes_actives = set(range(n))
+    colonnes_actives = set(range(m))
+
+    def deux_min(L):
+        L = sorted(L)
+        if len(L) == 1:
+            return L[0], L[0]
+        return L[0], L[1]
+
+    while lignes_actives and colonnes_actives:
+        penal_lignes = {}
+        penal_colonnes = {}
+
+        for i in lignes_actives:
+            couts = [A[i][j] for j in colonnes_actives]
+            c1, c2 = deux_min(couts)
+            penal_lignes[i] = c2 - c1
+
+        for j in colonnes_actives:
+            couts = [A[i][j] for i in lignes_actives]
+            c1, c2 = deux_min(couts)
+            penal_colonnes[j] = c2 - c1
+
+        headers_pen = [""] + [f"C{j+1}" for j in colonnes_actives] + ["Pénalité"]
+        donnees_pen = []
+
+        for i in lignes_actives:
+            row = [f"P{i+1}"] + [A[i][j] for j in colonnes_actives] + [penal_lignes[i]]
+            donnees_pen.append(row)
+
+        row_col = ["Pénalité"]
+        for j in colonnes_actives:
+            row_col.append(penal_colonnes[j])
+        row_col.append("")
+        donnees_pen.append(row_col)
+
+        afficher_tableau(headers_pen, donnees_pen)
+
+        best_pen = -1
+        choix = None
+        choix_type = None
+
+        for i, p in penal_lignes.items():
+            if p > best_pen:
+                best_pen = p
+                choix = i
+                choix_type = "L"
+
+        for j, p in penal_colonnes.items():
+            if p > best_pen:
+                best_pen = p
+                choix = j
+                choix_type = "C"
+
+        if choix_type == "L":
+            i = choix
+            min_cout = min(A[i][j] for j in colonnes_actives)
+            candidats = [j for j in colonnes_actives if A[i][j] == min_cout]
+            j = max(candidats, key=lambda jj: min(restP[i], restC[jj]))
+        else:
+            j = choix
+            min_cout = min(A[i][j] for i in lignes_actives)
+            candidats = [i for i in lignes_actives if A[i][j] == min_cout]
+            i = max(candidats, key=lambda ii: min(restP[ii], restC[j]))
+
+        x = min(restP[i], restC[j])
+        B[i][j] = x
+        restP[i] -= x
+        restC[j] -= x
+
+        headers_B, donnees_B = construire_tableau_proposition(B)
+        afficher_tableau(headers_B, donnees_B)
+
+        if restP[i] == 0:
+            lignes_actives.remove(i)
+        if restC[j] == 0:
+            colonnes_actives.remove(j)
+
+    return B
+
 
 # ================================================================
-# ALGORITHME MARCHE PIED EN COURS
+# ALGORITHME MARCHE PIED
 # ================================================================
 
 def construire_graphe(B):
@@ -289,12 +306,6 @@ def detecter_cycle_bfs(graphe):
 
 
 def reconstruire_cycle(parent, u, v):
-    """
-    Reconstruit le cycle lorsqu'un BFS détecte un cycle.
-    parent : dictionnaire parent[sommet]
-    u, v : sommets aux extrémités du cycle détecté
-    Retour : liste de sommets formant le cycle
-    """
     chemin_u = []
     x = u
     while x is not None:
@@ -307,7 +318,6 @@ def reconstruire_cycle(parent, u, v):
         chemin_v.append(x)
         x = parent[x]
 
-    # Trouver le premier ancêtre commun
     for s in chemin_u:
         if s in chemin_v:
             idx_u = chemin_u.index(s)
@@ -319,10 +329,6 @@ def reconstruire_cycle(parent, u, v):
 from collections import deque
 
 def composantes_connexes(graphe):
-    """
-    Retourne toutes les composantes connexes du graphe.
-    Chaque composante est une liste de sommets.
-    """
     visited = set()
     composantes = []
 
@@ -345,15 +351,8 @@ def composantes_connexes(graphe):
     return composantes
 
 def maximiser_sur_cycle(B, cycle):
-    """
-    Maximisation du transport sur un cycle détecté.
-    cycle : liste de sommets alternant P/C
-    B : matrice des quantités
-    Retour : B mise à jour
-    """
     edges = []
 
-    # Construire les arêtes (i, j) selon le cycle
     for k in range(len(cycle)):
         a = cycle[k]
         b = cycle[(k + 1) % len(cycle)]
@@ -362,13 +361,10 @@ def maximiser_sur_cycle(B, cycle):
         else:
             edges.append((b[1], a[1]))
 
-    # Arêtes "moins" = positions impaires
     moins = edges[1::2]
 
-    # θ = minimum des quantités sur arêtes "-"
     theta = min(B[i][j] for i, j in moins)
 
-    # Mise à jour des quantités sur le cycle
     for idx, (i, j) in enumerate(edges):
         if idx % 2 == 0:
             B[i][j] += theta
@@ -378,10 +374,6 @@ def maximiser_sur_cycle(B, cycle):
     return B
 
 def corriger_degenerescence(B):
-    """
-    Ajoute des arêtes fictives (quantité 1) si nécessaire pour obtenir n+m-1 arêtes.
-    Garantit que le graphe devient connexe pour le calcul des potentiels.
-    """
     n = len(B)
     m = len(B[0])
     arêtes = sum(1 for i in range(n) for j in range(m) if B[i][j] > 0)
@@ -391,25 +383,21 @@ def corriger_degenerescence(B):
             if arêtes >= n + m - 1:
                 break
             if B[i][j] == 0:
-                B[i][j] = 1  # arête fictive réelle pour connecter le graphe
+                B[i][j] = 1  
                 arêtes += 1
 
     return B
 
 
 def calculer_potentiels(A, B):
-    """
-    Calcule les potentiels u (fournisseurs) et v (clients) pour une proposition B.
-    Gestion robuste : si un sommet est isolé, on met son potentiel à 0.
-    """
     n = len(B)
     m = len(B[0])
     u = [None] * n
     v = [None] * m
 
-    # On fixe u[0] = 0
+
     u[0] = 0
-    queue = [0]  # sommets fournisseurs à traiter
+    queue = [0]  
 
     while queue:
         i = queue.pop(0)
@@ -417,13 +405,11 @@ def calculer_potentiels(A, B):
             if B[i][j] > 0:
                 if v[j] is None:
                     v[j] = A[i][j] - u[i]
-                    # on peut maintenant propager à d'autres fournisseurs connectés à j
                     for k in range(n):
                         if B[k][j] > 0 and u[k] is None:
                             u[k] = A[k][j] - v[j]
                             queue.append(k)
 
-    # Tout potentiel restant None → on le met à 0
     for idx in range(n):
         if u[idx] is None:
             u[idx] = 0
@@ -435,9 +421,6 @@ def calculer_potentiels(A, B):
 
 
 def calculer_couts_marginaux(A, B, u, v):
-    """
-    Calcul des coûts marginaux Δ_ij = c_ij - (u_i + v_j) pour les cases non basiques (B[i][j]==0)
-    """
     n = len(B)
     m = len(B[0])
     Delta = [[0 for _ in range(m)] for _ in range(n)]
@@ -447,15 +430,11 @@ def calculer_couts_marginaux(A, B, u, v):
             if B[i][j] == 0:
                 Delta[i][j] = A[i][j] - (u[i] + v[j])
             else:
-                Delta[i][j] = ""  # case basique
+                Delta[i][j] = ""  
 
     return Delta
 
 def meilleure_arete_ameliore(Delta):
-    """
-    Recherche la case non basique ayant le Δ minimal (plus négatif)
-    Retour : position (i,j) et valeur Δ
-    """
     best = 0
     pos = None
 
@@ -468,15 +447,6 @@ def meilleure_arete_ameliore(Delta):
     return pos, best
 
 def methode_marche_pied(A, P, C):
-    """
-    Méthode du marche-pied complète et correcte avec Nord-Ouest.
-    Entrée :
-        A : matrice des coûts
-        P : liste des provisions
-        C : liste des commandes
-    Sortie :
-        B : proposition finale de transport
-    """
     n = len(P)
     m = len(C)
 
@@ -503,7 +473,6 @@ def methode_marche_pied(A, P, C):
     if has_cycle:
         print("Cycle détecté :", cycle)
 
-        # Conversion cycle en arêtes (i,j)
         edges = []
         for k in range(len(cycle)):
             curr_type, curr_idx = cycle[k]
@@ -518,10 +487,9 @@ def methode_marche_pied(A, P, C):
         # -------------------------------
         min_val = float('inf')
         for k, (i,j) in enumerate(edges):
-            if k % 2 == 1:  # positions à réduire
+            if k % 2 == 1:  
                 if B[i][j] < min_val:
                     min_val = B[i][j]
-        # Appliquer alternance + et -
         for k, (i,j) in enumerate(edges):
             if k % 2 == 0:
                 B[i][j] += min_val
@@ -567,7 +535,7 @@ def methode_marche_pied(A, P, C):
     if pos is not None:
         i,j = pos
         print(f"\nMeilleure arête améliorante : B[{i+1},{j+1}] avec Δ = {valeur}")
-        B[i][j] = 1  # ajout automatique
+        B[i][j] = 1 
         print(f"Arête B[{i+1},{j+1}] ajoutée à la proposition")
     else:
         print("\nAucune arête améliorante détectée")
@@ -614,7 +582,6 @@ if __name__ == "__main__":
         v = [0] * m                         # potentiels clients
         Delta = [[0 for _ in range(m)] for _ in range(n)]  # coûts marginaux
 
-        # Boucle de menu interne pour ce problème
         while True:
             print("\n--- MENU POUR LE PROBLEME", num_probleme, "---")
             print("1 - Afficher le tableau des coûts / provisions / commandes")
@@ -653,22 +620,18 @@ if __name__ == "__main__":
                 afficher_tableau(headers_delta, donnees_delta)
 
             elif choix_action == "5":
-                # Appliquer Nord-Ouest sur P, C -> B
                 B = nord_ouest(P, C)
                 headers_B, donnees_B = construire_tableau_proposition(B)
                 print("\n--- Proposition de transport (Nord-Ouest) ---")
                 afficher_tableau(headers_B, donnees_B)
 
-                # Plus tard : recalculer u, v, Delta ici
 
             elif choix_action == "6":
-                # Appliquer Balas-Hammer (stub pour l’instant)
                 B = balas_hammer(A, P, C)
                 headers_B, donnees_B = construire_tableau_proposition(B)
                 print("\n--- Proposition de transport (Balas-Hammer) ---")
                 afficher_tableau(headers_B, donnees_B)
 
-                # Plus tard : recalculer u, v, Delta ici
             elif choix_action == "7":
                 B = methode_marche_pied(A, P, C)
 
